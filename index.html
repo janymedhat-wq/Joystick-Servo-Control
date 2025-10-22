@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Joystick Servo Control Documentation</title>
+    <title>PacManuino: Joystick-Controlled Pac-Man Game</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -28,7 +28,7 @@
             --secondary-bg: #f5f5f5; /* Off-white for section backgrounds */
             --border-color: #000000;
             --code-text: #000000; /* Pure Black for code in light mode */
-            --highlight-color: #3b82f6; /* Blue for emphasis */
+            --highlight-color: #facc15; /* Yellow/Gold for Pac-Man emphasis */
         }
 
         /* Define the Dark theme colors */
@@ -38,7 +38,7 @@
             --secondary-bg: #111111; /* Dark gray/black for section backgrounds */
             --border-color: #ffffff;
             --code-text: #ffffff; /* Pure White for code in dark mode */
-            --highlight-color: #60a5fa; /* Brighter blue for emphasis */
+            --highlight-color: #fcd34d; /* Brighter gold for Pac-Man emphasis */
         }
 
         /* Apply the clean, monospaced font to the entire body and enable smooth transition */
@@ -121,17 +121,16 @@
 </head>
 
 <body data-theme="dark" class="min-h-screen p-6 sm:p-12 md:p-16">
-
     <!-- Main Content Container (Centered and Max Width) -->
     <div class="max-w-5xl mx-auto space-y-16 sm:space-y-24">
 
         <!-- Header and Introduction Section -->
         <header class="text-center py-8">
             <h1 class="font-title text-5xl sm:text-7xl md:text-8xl font-extrabold mb-10 tracking-widest leading-none text-default">
-                JOYSTICK SERVO CONTROL
+                PACMANUINO: JOYSTICK GAME
             </h1>
             <p class="text-base sm:text-lg leading-relaxed max-w-3xl mx-auto border-default border-t-2 border-b-2 py-5 px-2" style="color: var(--text-color); opacity: 0.7;">
-                THIS DOCUMENTATION DETAILS THE "JOYSTICK SERVO CONTROL" PROJECT, WHICH UTILIZES ANALOG INPUT FROM A JOYSTICK TO MANIPULATE THE ANGLE OF A SERVO MOTOR IN REAL-TIME.
+                THIS DOCUMENTATION DETAILS THE "PACMANUINO" PROJECT, A MINIMALIST PAC-MAN GAME IMPLEMENTED ON AN ARDUINO, UTILIZING A JOYSTICK MODULE FOR PLAYER MOVEMENT CONTROL.
             </p>
         </header>
 
@@ -148,7 +147,7 @@
             </a>
             <a href="#learning" class="p-3 hover:opacity-70 transition duration-300 ease-in-out hover:scale-105 active:scale-95 underline underline-offset-4" style="color: var(--text-color);">
                 LEARNING
-            </a
+            </a>
             <!-- THEME TOGGLE BUTTON -->
             <button id="themeToggleBtn" onclick="toggleTheme()" class="p-3 text-sm font-bold border-2 border-default transition duration-300 ease-in-out hover:scale-105 active:scale-95 hover:bg-opacity-80" style="color: var(--text-color); border-color: var(--border-color);">
                 DARK / LIGHT
@@ -162,7 +161,7 @@
         <section id="code" class="p-2 sm:p-0">
             <h2 class="text-3xl sm:text-4xl font-title font-extrabold tracking-widest mb-6 text-default">SOURCE CODE</h2>
             <p class="text-gray-300 mb-6 text-center max-w-2xl mx-auto" style="color: var(--text-color); opacity: 0.7;">
-                THE ARDUINO SKETCH USES THE DEDICATED SERVO LIBRARY AND THE CRITICAL `MAP()` FUNCTION TO TRANSLATE JOYSTICK POSITION TO SERVO ANGLE.
+                THE ARDUINO SKETCH IMPLEMENTS THE GAME LOOP, ANALOG INPUT PROCESSING, AND USES THE U8G2 LIBRARY TO DRIVE A 128X64 OLED DISPLAY.
             </p>
 
             <div class="relative">
@@ -174,23 +173,78 @@
                 </button>
                 <div id="copyMessage" class="absolute top-0 right-24 text-sm opacity-0 transition-opacity duration-300" style="color: var(--text-color);">COPIED!</div>
 
-                <pre class="code-block"><code class="language-cpp" id="projectCode">#include <Servo.h>
+                <pre class="code-block"><code class="language-cpp" id="projectCode">#include <U8g2lib.h> // Conceptual library for OLED/LCD display
+#include <SPI.h>
+#include <Wire.h>
 
-Servo wingServo;   // Create a servo object
+// U8g2 object for a 128x64 I2C OLED display (replace with your specific display constructor)
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
-int joyX = A0;     // Joystick X-axis connected to A0
-int servoPin = 9;  // Servo signal wire connected to pin 9
+// Joystick Analog Pins
+const int JOY_X_PIN = A0; 
+const int JOY_Y_PIN = A1; 
+const int JOY_SW_PIN = 2; // Joystick button for START/PAUSE
+
+// Game state variables
+int pacmanX = 64; // Starting X coordinate (center of 128)
+int pacmanY = 32; // Starting Y coordinate (center of 64)
+const int MOVE_SPEED = 1;
+const int DEADZONE = 500; // Analog value threshold (out of 1023)
 
 void setup() {
-  wingServo.attach(servoPin);  // Attach the servo
+  // Initialize the OLED display
+  u8g2.begin();
+
+  // Setup joystick digital button
+  pinMode(JOY_SW_PIN, INPUT_PULLUP);
 }
 
 void loop() {
-  int xValue = analogRead(joyX);             // Read joystick (0–1023)
-  int angle = map(xValue, 0, 1023, 0, 180);  // Convert range to 0–180°
-  
-  wingServo.write(angle);                    // Move servo to that angle
-  delay(10);                                 // Smooth movement
+  // 1. Read Joystick Input (0 - 1023)
+  int xValue = analogRead(JOY_X_PIN);
+  int yValue = analogRead(JOY_Y_PIN);
+
+  // 2. Determine Movement Direction based on Deadzone
+  int dx = 0;
+  int dy = 0;
+
+  if (xValue < 1023 / 2 - DEADZONE / 2) {
+    dx = -MOVE_SPEED; // Move Left
+  } else if (xValue > 1023 / 2 + DEADZONE / 2) {
+    dx = MOVE_SPEED;  // Move Right
+  }
+
+  if (yValue < 1023 / 2 - DEADZONE / 2) {
+    dy = MOVE_SPEED;  // Move Up (Note: Y=0 is usually top of screen)
+  } else if (yValue > 1023 / 2 + DEADZONE / 2) {
+    dy = -MOVE_SPEED; // Move Down
+  }
+
+  // 3. Update Pac-Man Position
+  pacmanX += dx;
+  pacmanY += dy;
+
+  // 4. Boundary Check (Keep Pac-Man on the 128x64 screen)
+  pacmanX = constrain(pacmanX, 0, 127);
+  pacmanY = constrain(pacmanY, 0, 63);
+
+  // 5. Drawing routine (U8G2 Page Loop)
+  u8g2.firstPage();
+  do {
+    // Draw the static maze (Conceptual - replace with actual maze drawing logic)
+    u8g2.drawFrame(0, 0, 128, 64);
+    
+    // Draw Pac-Man (a simple filled circle)
+    u8g2.drawDisc(pacmanX, pacmanY, 4);
+
+    // Placeholder for drawing dots, ghosts, and score
+    // u8g2.setFont(u8g2_font_helvR08_tf);
+    // u8g2.drawStr(1, 63, "SCORE: 0000");
+
+  } while (u8g2.nextPage());
+
+  // Small delay to control the frame rate and stabilize input
+  delay(20); 
 }
                 </code></pre>
             </div>
@@ -203,25 +257,24 @@ void loop() {
         <section id="schematic" class="p-2 sm:p-0">
             <h2 class="text-3xl sm:text-4xl font-title font-extrabold tracking-widest mb-6 text-default">CIRCUIT SCHEMATIC</h2>
             <p class="text-gray-300 mb-6 text-center max-w-2xl mx-auto" style="color: var(--text-color); opacity: 0.7;">
-                THE SCHEMATIC HIGHLIGHTS THE ANALOG CONNECTION FOR THE JOYSTICK POTENTIOMETER AND THE PWM CONNECTION FOR THE SERVO MOTOR SIGNAL.
+                THE SETUP REQUIRES CONNECTIONS FOR THE JOYSTICK MODULE (ANALOG AND DIGITAL INPUTS) AND AN I2C OLED DISPLAY (SERIAL COMMUNICATION).
             </p>
             <!-- Scrollable container for the Schematic Image/Sketch -->
             <div class="component-box overflow-auto max-h-[600px] w-full">
                 <!-- Placeholder for the schematic image -->
                 <img
-                    src="joystcik.png"
-                    alt="Circuit Schematic Sketch showing a joystick module connected to Arduino Analog Pin A0 and a servo motor connected to Digital Pin 9."
+                    src="joystick.png"
+                    alt="Circuit Schematic Sketch showing a joystick module and an I2C OLED display connected to Arduino."
                     class="w-auto h-auto min-w-full"
-                    onerror="this.onerror=null; this.src='https://placehold.co/800x600/111111/ffffff?text=JOYSTICK+SERVO+SCHEMATIC+SKETCH+LOAD+FAILED'"
+                    onerror="this.onerror=null; this.src='https://placehold.co/800x600/111111/ffffff?text=PACMANUINO+SCHEMATIC+OLED+AND+JOYSTICK+CONNECTION'"
                 />
-                
             </div>
             <ul class="list-none text-sm mt-8 text-gray-400 space-y-2 max-w-xl mx-auto">
                 <li class="border-b border-gray-800 pb-2" style="border-color: var(--border-color); opacity: 0.7;">
-                    <span class="font-bold text-default">JOYSTICK (X-AXIS):</span> $V_{R_X}$ Pin $\rightarrow$ Analog Pin A0. VCC $\rightarrow$ 5V. GND $\rightarrow$ GND.
+                    <span class="font-bold text-default">JOYSTICK:</span> $V_{R_X} \rightarrow$ Analog A0. $V_{R_Y} \rightarrow$ Analog A1. SW $\rightarrow$ Digital Pin 2. VCC $\rightarrow$ 5V. GND $\rightarrow$ GND.
                 </li>
                 <li class="border-b border-gray-800 pb-2" style="border-color: var(--border-color); opacity: 0.7;">
-                    <span class="font-bold text-default">SERVO MOTOR:</span> Signal Wire (Usually Orange/Yellow) $\rightarrow$ Digital Pin 9 (PWM). Power Wire (Usually Red) $\rightarrow$ 5V. Ground Wire (Usually Brown/Black) $\rightarrow$ GND.
+                    <span class="font-bold text-default">I2C OLED DISPLAY:</span> SDA $\rightarrow$ Analog A4 (UNO). SCL $\rightarrow$ Analog A5 (UNO). VCC $\rightarrow$ 5V. GND $\rightarrow$ GND.
                 </li>
             </ul>
         </section>
@@ -229,26 +282,52 @@ void loop() {
         <!-- Horizontal Rule Separator -->
         <hr class="hr-separator my-10">
 
-        <!-- VIDEO Section -->
+        <!-- VIDEO Section (Updated for Dual Videos) -->
         <section id="video" class="p-2 sm:p-0">
-            <h2 class="text-3xl sm:text-4xl font-title font-extrabold tracking-widest mb-6 text-default">EXECUTION VIDEO</h2>
+            <h2 class="text-3xl sm:text-4xl font-title font-extrabold tracking-widest mb-6 text-default">PROJECT EXECUTION: HARDWARE & SOFTWARE</h2>
             <p class="text-gray-300 mb-6 text-center max-w-2xl mx-auto" style="color: var(--text-color); opacity: 0.7;">
-                THIS SECTION DEMONSTRATES THE PHYSICAL INTERACTION: MANIPULATING THE JOYSTICK TO ACHIEVE PRECISE, SMOOTH CONTROL OVER THE SERVO'S ANGULAR POSITION.
+                TWO SEPARATE VIDEOS ARE PROVIDED: ONE SHOWCASING THE FINAL HARDWARE BUILD AND GAMEPLAY, AND ANOTHER DETAILING THE ARDUINO SKETCH AND GAME LOGIC.
             </p>
-            <div class="video-container">
-                <!-- REPLACE THIS YOUTUBE URL WITH YOUR OWN VIDEO LINK (e.g., embedding your 'joystick_servo.mp4' demonstration) -->
-                <iframe
-                    src="video.mp4"
-                    frameborder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowfullscreen
-                    title="Joystick Servo Control Project Demonstration Video"
-                    loading="lazy">
-                </iframe>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Video 1: Hardware & Gameplay -->
+                <div>
+                    <h3 class="text-xl font-bold mb-3 text-center highlight-text">HARDWARE DEMONSTRATION</h3>
+                    <div class="video-container">
+                        <!-- Placeholder for the Hardware Video -->
+                        <iframe
+                            src="videoo.mp4"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            title="PacManuino Hardware Gameplay Demonstration"
+                            loading="lazy">
+                        </iframe>
+                    </div>
+                    <p class="mt-4 text-center text-xs" style="color: var(--text-color); opacity: 0.7;">
+                        PHYSICAL PROTOTYPE SHOWCASING JOYSTICK INPUT AND OLED DISPLAY OUTPUT.
+                    </p>
+                </div>
+
+                <!-- Video 2: Software & Code Walkthrough -->
+                <div>
+                    <h3 class="text-xl font-bold mb-3 text-center highlight-text">SOFTWARE & CODE WALKTHROUGH</h3>
+                    <div class="video-container">
+                        <!-- Placeholder for the Software Video -->
+                        <iframe
+                            src="pacman.mp4"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            title="PacManuino Arduino Code and Game Logic Explanation"
+                            loading="lazy">
+                        </iframe>
+                    </div>
+                    <p class="mt-4 text-center text-xs" style="color: var(--text-color); opacity: 0.7;">
+                        EXPLANATION OF THE GAME LOOP, INPUT PROCESSING, AND DISPLAY DRIVING LOGIC.
+                    </p>
+                </div>
             </div>
-            <p class="mt-6 text-center text-xs" style="color: var(--text-color); opacity: 0.7;">
-                THE FINAL WORKING PROTOTYPE DEMONSTRATING REAL-TIME CONTROL.
-            </p>
         </section>
 
         <!-- Horizontal Rule Separator -->
@@ -258,36 +337,36 @@ void loop() {
         <section id="learning" class="p-2 sm:p-0">
             <h2 class="text-3xl sm:text-4xl font-title font-extrabold tracking-widest mb-6 text-default">KEY LEARNING OUTCOMES</h2>
             <p class="text-gray-300 mb-10 text-center max-w-3xl mx-auto" style="color: var(--text-color); opacity: 0.7;">
-                THE FOLLOWING CONCEPTS WERE MASTERED DURING THE DEVELOPMENT AND PROTOTYPING OF THIS EMBEDDED CONTROL SYSTEM.
+                THE FOLLOWING CONCEPTS WERE MASTERED DURING THE DEVELOPMENT AND PROTOTYPING OF THIS MINIMALIST EMBEDDED GAME SYSTEM.
             </p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Learning 1: Analog to Digital Conversion -->
+                <!-- Learning 1: 2D Input Processing -->
                 <div class="component-box p-5 border-l-4 border-l-yellow-500 hover:shadow-lg transition duration-300">
-                    <h4 class="text-xl font-bold mb-2 highlight-text">ANALOG INPUT VIA $ANALOGREAD()$</h4>
+                    <h4 class="text-xl font-bold mb-2 highlight-text">2D INPUT AND DEADZONES</h4>
                     <p class="text-sm" style="color: var(--text-color);">
-                        UNDERSTANDING HOW THE ARDUINO ADC CONVERTS THE VARIABLE VOLTAGE FROM THE JOYSTICK'S POTENTIOMETER INTO A 10-BIT DIGITAL VALUE (0 TO 1023).
+                        LEARNING TO PROCESS TWO ANALOG INPUTS ($V_{R_X}$ AND $V_{R_Y}$) SIMULTANEOUSLY AND IMPLEMENTING A SOFTWARE DEADZONE TO PREVENT PAC-MAN DRIFTING WHEN THE JOYSTICK IS CENTERED.
                     </p>
                 </div>
-                <!-- Learning 2: Data Scaling and Mapping -->
+                <!-- Learning 2: Game Loop Implementation -->
                 <div class="component-box p-5 border-l-4 border-l-red-500 hover:shadow-lg transition duration-300">
-                    <h4 class="text-xl font-bold mb-2 highlight-text">CRITICAL DATA MAPPING ($MAP()$ FUNCTION)</h4>
+                    <h4 class="text-xl font-bold mb-2 highlight-text">STATE MANAGEMENT & GAME LOOP</h4>
                     <p class="text-sm" style="color: var(--text-color);">
-                        MASTERING THE `map()` FUNCTION TO RELIABLY TRANSLATE THE SOURCE RANGE (0-1023) TO THE DESTINATION RANGE (0-180), ENSURING SMOOTH, PREDICTABLE CONTROL.
+                        MASTERING THE CORE GAME LOOP STRUCTURE: INPUT $\rightarrow$ UPDATE STATE $\rightarrow$ RENDER OUTPUT, AND MANAGING BASIC GAME ENTITIES LIKE PLAYER POSITION AND BOUNDARIES.
                     </p>
                 </div>
-                <!-- Learning 3: PWM for Servo Control -->
+                <!-- Learning 3: Display Driving -->
                 <div class="component-box p-5 border-l-4 border-l-blue-500 hover:shadow-lg transition duration-300">
-                    <h4 class="text-xl font-bold mb-2 highlight-text">PWM AND SERVO LIBRARY UTILIZATION</h4>
+                    <h4 class="text-xl font-bold mb-2 highlight-text">MONOCHROME DISPLAY DRIVING</h4>
                     <p class="text-sm" style="color: var(--text-color);">
-                        IMPLEMENTING THE SERVO LIBRARY TO GENERATE THE NECESSARY PULSE-WIDTH MODULATION (PWM) SIGNAL ON PIN D9 REQUIRED TO COMMAND THE SERVO MOTOR'S POSITION.
+                        UTILIZING LIBRARIES (E.G., U8G2) TO INTERFACE WITH SERIAL DISPLAYS (I2C/SPI), UNDERSTANDING THE CONCEPTS OF PAGE BUFFERING AND FRAME-BY-FRAME RENDERING.
                     </p>
                 </div>
-                <!-- Learning 4: Real-time Control Loop -->
+                <!-- Learning 4: Constraints and Optimization -->
                 <div class="component-box p-5 border-l-4 border-l-green-500 hover:shadow-lg transition duration-300">
-                    <h4 class="text-xl font-bold mb-2 highlight-text">REAL-TIME CONTROL LOOP STABILITY</h4>
+                    <h4 class="text-xl font-bold mb-2 highlight-text">CODE OPTIMIZATION & CONSTRAINTS</h4>
                     <p class="text-sm" style="color: var(--text-color);">
-                        OPTIMIZING THE `loop()` FREQUENCY AND ADDING A SMALL DELAY ($10ms$) TO BALANCE RAPID RESPONSE WITH MOTOR STABILITY, MINIMIZING JITTER.
+                        OPTIMIZING CODE FOR LIMITED ARDUINO MEMORY (SRAM/FLASH) AND USING THE `constrain()` FUNCTION TO ENSURE GAME ENTITIES REMAIN WITHIN THE DEFINED GAME BORDERS.
                     </p>
                 </div>
             </div>
@@ -298,7 +377,7 @@ void loop() {
 
         <!-- Footer -->
         <footer class="text-center py-6 text-xs" style="color: var(--text-color); opacity: 0.7;">
-            <p>&copy; 2025 JOYSTICK SERVO CONTROL PROJECT. DOCUMENTATION FOR ELECTRONICS AND EMBEDDED SYSTEMS.</p>
+            <p>&copy; 2025 PACMANUINO: JOYSTICK GAME PROJECT. DOCUMENTATION FOR ELECTRONICS AND EMBEDDED SYSTEMS.</p>
         </footer>
     </div>
 
@@ -387,4 +466,3 @@ void loop() {
     </script>
 </body>
 </html>
-
